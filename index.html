@@ -196,6 +196,7 @@ nav button[aria-selected="true"]{color:var(--ink)}
 nav button[aria-selected="true"] svg{stroke:var(--brass)}
 @media (prefers-reduced-motion:reduce){.orb,.bar i{transition:none!important}}
 /* ===== v4 additions ===== */
+[hidden]{display:none!important}
 .orbwrap{position:relative;width:220px;height:220px;margin:10px auto 6px;display:grid;place-items:center;transition:none}
 .orbguide{position:absolute;inset:0;border-radius:50%;border:2px dashed var(--line)}
 .orb2{width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 42% 38%,var(--zone),var(--zoneSoft) 72%);transform:scale(.45);transition:transform var(--d,4s) ease-in-out}
@@ -404,7 +405,7 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
       </div>
       <div class="err" id="micErr"></div>
       <label class="toggle"><input type="checkbox" id="optRec" checked> Save a recording of this session</label>
-      <label class="toggle"><input type="checkbox" id="optWords" checked> Track words and filler words</label>
+      <label class="toggle"><input type="checkbox" id="optWords" checked> <span>Track words and filler words<small id="wordsNote" class="muted" style="display:block;font-size:13px" hidden>Off by default on Android: the phone's speech recogniser beeps each time it restarts, and the beeps end up in your recording.</small></span></label>
       <details>
         <summary>Pitch target</summary>
         <label><span>Target low</span><span id="lowLbl"></span></label>
@@ -477,8 +478,10 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
     <div class="set">
       <div class="srow"><span>AI coach<small id="aiStatus">Checking…</small></span></div>
       <label class="srow"><span>AI speaks out loud<small>Hear the other person in simulations</small></span><input type="checkbox" id="setVoice" style="width:22px;height:22px;accent-color:var(--zone)"></label>
-      <div class="srow"><span>AI voice<small>Voices come from your device. Pick the most natural one.</small></span><button class="ghost" id="voiceTest" style="padding:7px 14px;font-size:14px">Preview</button></div>
-      <div class="srow" style="padding-top:0"><select id="setVoiceName" style="width:100%"></select></div>
+      <div class="srow" id="natRow" hidden><span>Natural voices<small id="natStatus">Human-sounding voices that run on your phone. One-time 92 MB download, best on Wi-Fi.</small></span><button class="ghost" id="natBtn" style="padding:7px 14px;font-size:14px;flex:none">Download</button></div>
+      <div class="srow" id="natPick" hidden style="padding-top:0"><select id="natVoice" style="width:100%"></select></div>
+      <div class="srow" id="devRow"><span>AI voice<small>Voices come from your device. Pick the most natural one.</small></span><button class="ghost" id="voiceTest" style="padding:7px 14px;font-size:14px">Preview</button></div>
+      <div class="srow" id="devPick" style="padding-top:0"><select id="setVoiceName" style="width:100%"></select></div>
       <div class="srow"><span>Voice routine focus</span><select id="setGoal"></select></div>
       <div class="srow"><span>Appearance</span><select id="setTheme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
     </div>
@@ -642,6 +645,7 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
 
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 <script>
+const IS_ANDROID=/Android/i.test(navigator.userAgent);
 /* ================= utils + storage (swap this layer for a cloud database later) ================= */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1017,25 +1021,21 @@ document.getElementById('clearScript').onclick=()=>{coachScript=null;document.ge
    add a provider with the same two methods and point AI.provider at it. Keep API keys on a
    server, never in this file. */
 const Providers={
-  claude:{name:'Claude',fn:null,
-    async init(){try{if(window.claude&&claude.use)this.fn=await claude.use('sample')}catch(e){this.fn=null}return !!this.fn},
-    async chat(turns,o={}){const op={cache:false,modelTier:o.tier||'default'};if(o.onText)op.onText=o.onText;if(o.signal)op.signal=o.signal;const r=await this.fn(turns,op);return r.text},
-    async json(prompt,o={}){const op={cache:false,modelTier:o.tier||'default'};if(o.signal)op.signal=o.signal;return this.fn.json(prompt,op)}},
   server:{name:'Your server',endpoint:'', // e.g. 'https://api.yourapp.com/ai' once you host the app yourself
     async init(){return !!this.endpoint},
     async chat(turns,o={}){const r=await fetch(this.endpoint+'/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({turns})});if(!r.ok)throw{code:'upstream_error'};return(await r.json()).text},
     async json(prompt,o={}){const r=await fetch(this.endpoint+'/json',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt})});if(!r.ok)throw{code:'upstream_error'};return r.json()}}
 };
 const AI={provider:null,status:'checking',
-  async init(){for(const k of ['server','claude']){if(await Providers[k].init()){this.provider=Providers[k];break}}
+  async init(){for(const k of ['server']){if(await Providers[k].init()){this.provider=Providers[k];break}}
     this.status=this.provider?'ready':'off';renderAIStatus()},
   ok(){return !!this.provider},
   chat(t,o){if(!this.provider)return Promise.reject({code:'off'});return this.provider.chat(t,o)},
   json(p,o){if(!this.provider)return Promise.reject({code:'off'});return this.provider.json(p,o)},
-  err(e){const c=e&&e.code;return c==='not_granted'?'AI access was declined. Reopen the page and allow it to use the AI coach.':c==='rate_limited'?'Too many requests right now. Wait a minute, then try again.':c==='off'?'The AI coach is not available here.':c==='cancelled'?'Stopped.':c==='refused'?'The AI declined to continue this conversation. Try rephrasing.':c==='prompt_too_large'?'This conversation is too long. End it and get your feedback.':`The AI didn't respond${c?' ('+c+')':''}. Try again in a moment.`}};
+  err(e){const c=e&&e.code;return c==='not_granted'?'AI access was declined. Reopen the page and allow it to use the AI coach.':c==='rate_limited'?'Too many requests right now. Wait a minute, then try again.':c==='off'?'AI coaching is coming soon.':c==='cancelled'?'Stopped.':c==='refused'?'The AI declined to continue this conversation. Try rephrasing.':c==='prompt_too_large'?'This conversation is too long. End it and get your feedback.':`The AI didn't respond${c?' ('+c+')':''}. Try again in a moment.`}};
 function renderAIStatus(){const on=AI.ok();try{if(SU&&!$('suSheet').hidden)renderSetup()}catch(x){}
-  if($('aiStatus'))$('aiStatus').textContent=AI.status==='checking'?'Checking…':on?`Connected (${AI.provider.name})`:'Not available here. Feedback uses on-device analysis.';
-  const b=$('aiBanner');if(b){b.hidden=on||AI.status==='checking';b.textContent='AI conversations need the AI coach, which isn\'t available in this view. Open the app inside Claude to use simulations. Voice training and on-device feedback still work.'}}
+  if($('aiStatus'))$('aiStatus').textContent=AI.status==='checking'?'Checking…':on?'Connected':'Coming soon. Feedback uses on-device analysis for now.';
+  const b=$('aiBanner');if(b){b.hidden=on||AI.status==='checking';b.textContent='AI conversations are coming soon. Voice training, the voice coach and on-device feedback work now.'}}
 
 /* ================= speech: listen (speech-to-text) and speak (text-to-speech) ================= */
 const SRx=window.SpeechRecognition||window.webkitSpeechRecognition;
@@ -1060,11 +1060,37 @@ const Voice={supported:!!SRx,
   list(){try{return speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang))}catch(e){return[]}},
   rank(v){let s=0;if(/natural|neural|online/i.test(v.name))s+=6;if(/premium|enhanced/i.test(v.name))s+=5;if(/google/i.test(v.name))s+=4;if(/samantha|daniel|karen|serena|aria|jenny|guy|sonia|ryan/i.test(v.name))s+=2;if(v.localService===false)s+=1;if(/en-(us|gb)/i.test(v.lang))s+=1;return s},
   pick(){const vs=this.list();const want=store.get('rs-voice','');return vs.find(v=>v.name===want)||[...vs].sort((a,b)=>this.rank(b)-this.rank(a))[0]||null},
-  speak(text,on=true){return new Promise(res=>{if(!on||!window.speechSynthesis){res();return}
+  speak(text,on=true){if(on&&Natural.on()&&Natural.tts){const per=(typeof RP!=='undefined'&&RP&&RP.persona)||'';const rate=/Impatient|Aggressive/.test(per)?1.1:/Beginner|Confused|Distracted/.test(per)?.92:1;
+      this.speaking=true;return Natural.speak(text,rate,!$('rpSheet').hidden?7000:0).then(()=>{this.speaking=false},e=>{this.speaking=false;if(e&&e.slow)return this.deviceSpeak(text,on)})}
+    return this.deviceSpeak(text,on)},
+  inChat:false,
+  deviceSpeak(text,on=true){
+    return new Promise(res=>{if(!on||!window.speechSynthesis){res();return}
     try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(text);u.voice=this.pick();
       const per=(typeof RP!=='undefined'&&RP&&RP.persona)||'';u.rate=/Impatient|Aggressive/.test(per)?1.1:/Beginner|Confused|Distracted/.test(per)?.95:1;u.pitch=/Aggressive/.test(per)?.9:1;
       u.onend=u.onerror=()=>{this.speaking=false;res()};this.speaking=true;speechSynthesis.speak(u)}catch(e){res()}})},
-  hush(){try{speechSynthesis.cancel()}catch(e){}this.speaking=false}};
+  hush(){try{speechSynthesis.cancel()}catch(e){}Natural.stop();this.speaking=false}};
+const NAT_VOICES=[['af_heart','Heart (American, female)'],['af_bella','Bella (American, female)'],['am_michael','Michael (American, male)'],['am_fenrir','Fenrir (American, male, deeper)'],['am_puck','Puck (American, male, lively)'],['bf_emma','Emma (British, female)'],['bm_george','George (British, male)'],['af_nicole','Nicole (American, female, soft)']];
+const Natural={tts:null,loading:null,audio:null,token:0,
+  allowed(){return true},
+  on(){return this.allowed()&&store.get('rs-natural',false)},
+  voice(){return store.get('rs-nvoice','af_heart')},
+  load(onProgress){if(this.tts)return Promise.resolve(this.tts);if(this.loading)return this.loading;
+    this.loading=(async()=>{const m=await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js');
+      const files={};const tts=await m.KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',{dtype:'q8',device:'wasm',
+        progress_callback:p=>{if(p.status==='progress'&&p.total){files[p.file]=[p.loaded,p.total];const t=Object.values(files).reduce((a,f)=>[a[0]+f[0],a[1]+f[1]],[0,0]);onProgress&&onProgress(Math.round(t[0]/t[1]*100))}}});
+      this.tts=tts;return tts})();
+    return this.loading.catch(e=>{this.loading=null;throw e})},
+  split(t){return(t.match(/[^.!?]+[.!?]*\s*/g)||[t]).map(x=>x.trim()).filter(Boolean)},
+  async speak(text,rate=1,maxWait=0){const my=++this.token;const tts=await this.load();const parts=this.split(text);
+    let next=tts.generate(parts[0],{voice:this.voice(),speed:rate});
+    // on slower phones, don't keep the user waiting: fall back to the device voice for this reply
+    if(maxWait&&!(await Promise.race([next.then(()=>true),new Promise(r=>setTimeout(()=>r(false),maxWait))]))){if(my===this.token)this.token++;throw{slow:true}}
+    for(let i=0;i<parts.length;i++){const a=await next;if(my!==this.token)return;
+      next=i+1<parts.length?tts.generate(parts[i+1],{voice:this.voice(),speed:rate}):null;
+      await new Promise(res=>{const url=URL.createObjectURL(a.toBlob());const el=new Audio(url);this.audio=el;el.onended=el.onerror=()=>{URL.revokeObjectURL(url);res()};el.play().catch(res)});
+      if(my!==this.token)return}},
+  stop(){this.token++;if(this.audio){try{this.audio.pause()}catch(e){}this.audio=null}}};
 const AudioRec={mr:null,stream:null,chunks:[],
   async start(){try{this.stream=await navigator.mediaDevices.getUserMedia({audio:true});this.chunks=[];this.mr=new MediaRecorder(this.stream);this.mr.ondataavailable=e=>e.data.size&&this.chunks.push(e.data);this.mr.start();return true}catch(e){this.mr=null;return false}},
   stop(){return new Promise(res=>{if(!this.mr||this.mr.state==='inactive'){res(null);return}this.mr.onstop=()=>{const b=new Blob(this.chunks,{type:this.mr.mimeType||'audio/webm'});this.stream.getTracks().forEach(t=>t.stop());this.mr=null;res(b)};this.mr.stop()})},
@@ -1190,7 +1216,7 @@ function renderBL(){const b=$('blBody');
     <div class="stickyact"><button class="primary" id="blStop">I'm done</button></div>`;$('blStop').onclick=blStop}
   else if(BL.phase==='load'){b.innerHTML=`<div class="loading"><div class="spinner"></div><div>Analysing your introduction…<br><span class="small">This can take up to a minute.</span></div></div>`}
   else if(BL.phase==='result')renderBLResult()}
-async function blRecord(){BL.phase='rec';renderBL();BL.audioOK=await AudioRec.start();
+async function blRecord(){BL.phase='rec';renderBL();BL.audioOK=IS_ANDROID?false:await AudioRec.start();
   BL.listener=Voice.listen({onText:t=>{const l=$('blLive');if(l)l.textContent=t||'Listening…'},maxSec:0});
   setTimeout(()=>{if(BL.phase==='rec'&&BL.listener.error&&BL.audioOK){AudioRec.cancel();BL.audioOK=false;BL.listener=Voice.listen({onText:t=>{const l=$('blLive');if(l)l.textContent=t||'Listening…'},maxSec:0})}},1500);
   BL.t0=Date.now();BL.tick=setInterval(()=>{const left=60-Math.floor((Date.now()-BL.t0)/1000);const el=$('blTimer');if(el)el.textContent=`0:${String(Math.max(left,0)).padStart(2,'0')}`;if(left<=0)blStop()},250)}
@@ -1212,7 +1238,7 @@ function renderBLResult(){const s=BL.sess,sc=s.scores,bi=s.feedback.biggestIssue
     ${s.prev!=null?`<p class="lede">Overall ${s.prev} → <b class="${s.overall>=s.prev?'up':'dn'}">${s.overall}</b></p>`:'<p class="lede">This is where you are today. Everything from here is measured against it.</p>'}
     <div class="startgrid">${keys.map(([k,l])=>`<div class="sp"><b>${sc[k]!=null?sc[k]:'–'}</b><span>${l}</span></div>`).join('')}</div>
     ${issueHTML(bi,'Your biggest opportunity right now')}
-    ${s.feedback.source==='device'?'<p class="small muted">Scored with on-device analysis. Open the app inside Claude for full AI feedback.</p>':''}
+    ${s.feedback.source==='device'?'<p class="small muted">Scored with on-device analysis.</p>':''}
     <div class="stickyact"><button class="ghost" id="blRetry">Try again</button><button class="primary" id="blDone">Continue</button></div>`;
   $('blRetry').onclick=()=>{BL={phase:'intro',prev:s};renderBL()};$('blDone').onclick=()=>{sheet('blSheet',false);go('home')}}
 $('blClose').onclick=()=>{if(BL&&BL.phase==='rec'){clearInterval(BL.tick);BL.listener.stop();AudioRec.cancel()}sheet('blSheet',false)};
@@ -1245,7 +1271,7 @@ function renderSetup(){const sc=SU.sc,custom=!sc;
    ${sc&&sc.type==='present'?`<div class="field"><label for="suContent">Your presentation (optional)</label><textarea id="suContent" rows="4" placeholder="Paste your slides, notes or topic. The audience will ask about it."></textarea><div class="hintx">Plain text works best. You'll present out loud next.</div></div>`:''}
    <div class="field"><label>Difficulty</label><div class="list">${Object.entries(DIFF).map(([k,d])=>`<button class="item" data-d="${k}"><span class="check ${SU.diff===k?'done':''}"></span><span class="grow">${d[0]}<span class="sub">${d[1]}</span></span></button>`).join('')}</div></div>
    <div class="field"><label>The other person is</label><div class="pick">${Object.keys(PERSONAS).map(p=>`<button class="chip" data-p="${p}" aria-pressed="${SU.persona===p}">${p}</button>`).join('')}</div></div>
-   ${AI.ok()?'':`<div class="banner">${AI.status==='checking'?'Connecting to the AI coach…':'AI conversations aren\'t available in this view. Open the app inside Claude to practise with an AI partner.'}</div>`}
+   ${AI.ok()?'':`<div class="banner">${AI.status==='checking'?'Connecting…':'AI conversations are coming soon.'}</div>`}
    <div class="stickyact"><button class="primary" id="suGo" ${AI.ok()?'':'disabled'}>Start conversation</button></div>`;
   const keep=()=>{if($('cuRole'))SU.cuRole=$('cuRole').value;if($('cuSit'))SU.cuSit=$('cuSit').value;if($('suContent'))SU.content=$('suContent').value};
   if($('cuRole')){$('cuRole').value=SU.cuRole||'';$('cuSit').value=SU.cuSit||''}if($('suContent'))$('suContent').value=SU.content||'';
@@ -1343,7 +1369,7 @@ $('siMic').onclick=async()=>{if(!Voice.supported){toast('Dictation needs Chrome.
   if(siL){const r=await siL.stop();siL=null;$('siMic').textContent='Dictate';if(r.text)$('siInput').value=r.text;return}
   siL=Voice.listen({onText:t=>$('siInput').value=t,maxSec:40,onLimit:()=>$('siMic').click()});$('siMic').textContent='Stop'};
 $('siGo').onclick=async()=>{const t=$('siInput').value.trim();if(t.length<3){toast('Type what you want to say first.');return}
-  if(!AI.ok()){$('siOut').innerHTML=`<div class="banner">${AI.err({code:'off'})} Open the app inside Claude to use Say it better.</div>`;return}
+  if(!AI.ok()){$('siOut').innerHTML=`<div class="banner">${AI.err({code:'off'})}</div>`;return}
   $('siGo').disabled=true;$('siOut').innerHTML='<div class="loading" style="padding:30px 0"><div class="spinner"></div>Rewriting…</div>';
   try{const j=await AI.json(sayItPrompt(t),{tier:'quick'});const st=(j.styles||[]).slice(0,5);logPractice();
     $('siOut').innerHTML=st.map((x,i)=>`<div class="style"><div class="n">${esc(x.style)}</div><div class="x">${esc(x.text)}</div><div class="w">${esc(x.why)}</div><div class="row"><button class="ghost" data-say="${i}">Listen</button><button class="ghost" data-copy="${i}">Copy</button></div></div>`).join('');
@@ -1475,12 +1501,24 @@ $('editGoals').onclick=()=>openOnboarding(1);$('retakeBase').onclick=openBaselin
 $('resetBtn').onclick=async()=>{if(!(await ask('Delete your profile, sessions, progress and recordings? This cannot be undone.','Delete everything',true)))return;
   Object.keys(localStorage).filter(k=>k.startsWith('rs-')).forEach(k=>store.del(k));try{await idb.clear()}catch(e){}location.reload()};
 
-function renderVoicePicker(){const sel=$('setVoiceName');const vs=Voice.list();const cur=Voice.pick();
+function renderNatural(st){const ok=Natural.allowed();$('natRow').hidden=!ok;if(!ok)return;const on=Natural.on();
+  $('natPick').hidden=!on;$('natVoice').innerHTML=NAT_VOICES.map(([k,n])=>`<option value="${k}" ${k===Natural.voice()?'selected':''}>${n}</option>`).join('');
+  $('devRow').hidden=on;$('devPick').hidden=on;
+  if(!st){$('natBtn').textContent=on?(Natural.tts?'Preview':'Loading…'):'Download';$('natBtn').disabled=on&&!Natural.tts}
+  $('natStatus').textContent=st||(on?(Natural.tts?'On. Your AI partner uses a natural voice.':'Getting voices ready…'):'Human-sounding voices that run on your phone. One-time 92 MB download, best on Wi-Fi.')}
+$('natBtn').onclick=async()=>{if(Natural.on()&&Natural.tts){Voice.speak('Hi. This is how I will sound in your practice conversations.');return}
+  $('natBtn').disabled=true;$('natBtn').textContent='Downloading…';
+  try{await Natural.load(pc=>renderNatural(`Downloading voices… ${pc}%`));store.set('rs-natural',true);renderNatural();toast('Natural voices are ready');Voice.speak('Hi. This is how I will sound in your practice conversations.')}
+  catch(e){$('natBtn').disabled=false;$('natBtn').textContent='Try again';renderNatural('The download didn\'t finish. Check your connection and try again.')}};
+$('natVoice').onchange=e=>{store.set('rs-nvoice',e.target.value);Voice.speak('Hi. This is how I will sound in your practice conversations.')};
+function renderVoicePicker(){renderNatural();const sel=$('setVoiceName');const vs=Voice.list();const cur=Voice.pick();
   sel.innerHTML=vs.length?[...vs].sort((a,b)=>Voice.rank(b)-Voice.rank(a)).map(v=>`<option value="${esc(v.name)}" ${cur&&cur.name===v.name?'selected':''}>${esc(v.name)} (${v.lang})</option>`).join(''):'<option>No English voices found on this device</option>';}
 $('setVoiceName').onchange=e=>{store.set('rs-voice',e.target.value);Voice.speak('Hi. This is how I will sound in your practice conversations.')};
 $('voiceTest').onclick=()=>Voice.speak('Hi. This is how I will sound in your practice conversations.');
 try{speechSynthesis.onvoiceschanged=()=>{if($('tab-profile').classList.contains('active'))renderVoicePicker()}}catch(e){}
+(function(){const w=$('optWords');const saved=store.get('rs-words',null);w.checked=saved!=null?saved:!IS_ANDROID;$('wordsNote').hidden=!IS_ANDROID;w.onchange=()=>store.set('rs-words',w.checked)})();
 /* ================= boot ================= */
+if(Natural.on())setTimeout(()=>Natural.load().then(()=>{if($('tab-profile').classList.contains('active'))renderNatural()}).catch(()=>{}),1500);
 applyTheme();renderStreak();syncBand();renderHome();renderRead();showTw();
 if(!PROFILE)openOnboarding(0);
 AI.init();
