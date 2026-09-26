@@ -224,7 +224,7 @@ nav button[aria-selected="true"] svg{stroke:var(--brass)}
 .warm svg{width:22px;height:22px;color:var(--brass);flex:none}
 .warm span{display:block;font-weight:400;font-size:14px;color:var(--muted)}
 .banner{background:var(--sunk);border-radius:16px;padding:12px 14px;font-size:15px;margin-bottom:14px}
-textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);resize:vertical}
+textarea,input[type=text],input[type=password]{font:inherit;width:100%;padding:12px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);resize:vertical}
 .field{margin:14px 0}
 .field>label{display:block;font-weight:600;margin-bottom:6px}
 .field .hintx{font-size:14px;color:var(--muted);margin-top:4px}
@@ -339,6 +339,7 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
   <section id="tab-home" class="active">
     <h2 id="greet">Good morning</h2>
     <p class="lede" style="margin-bottom:16px">What do you want to get better at today?</p>
+    <div class="opp" id="nudgeCard" hidden><div class="k">Keep your progress safe</div><p style="color:var(--ink)">Sign in to back up your sessions and scores, and use them on any phone.</p><div class="row"><button class="primary" id="nudgeGo" style="padding:8px 16px;font-size:15px">Sign in</button><button class="ghost" id="nudgeNo" style="padding:8px 16px;font-size:15px">Not now</button></div></div>
     <div class="opp" id="oppCard" hidden></div>
     <div class="actions">
       <button class="act wide" id="recoAct" hidden></button>
@@ -473,6 +474,7 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
   <!-- PROFILE -->
   <section id="tab-profile">
     <h2>Profile</h2>
+    <div class="set" id="acctBox" hidden style="margin-bottom:14px"></div>
     <div class="set" id="profRows"></div>
     <h3>Settings</h3>
     <div class="set">
@@ -552,6 +554,7 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
     </ul>
     <button class="primary" style="width:100%" data-ob="next">Get started</button>
     <p class="small muted" style="text-align:center;margin-top:10px">Takes about 2 minutes</p>
+    <p style="text-align:center;margin-top:6px" id="landSignIn" hidden><button class="ghost" style="box-shadow:none;color:var(--brass);padding:6px 10px" id="landSignInBtn">I already have an account</button></p>
   </div>
   <div class="ob-step" data-s="1">
     <div class="obbar"><i style="width:25%"></i></div>
@@ -641,6 +644,23 @@ textarea,input[type=text]{font:inherit;width:100%;padding:12px 14px;border-radiu
 
 <div class="sheet" id="askSheet" hidden style="background:rgba(0,0,0,.45);display:grid;place-items:center"><div class="askbox" role="alertdialog" aria-modal="true" aria-labelledby="askMsg">
   <p id="askMsg"></p><div class="row" style="justify-content:flex-end"><button class="ghost" id="askNo">Cancel</button><button class="primary" id="askYes">OK</button></div></div></div>
+<!-- Sign in -->
+<div class="sheet" id="authSheet" hidden><div class="inner">
+  <button class="close" id="authClose">Close</button>
+  <h2 id="authTitle">Sign in</h2>
+  <p class="lede" id="authLede">Back up your progress and use it on any device.</p>
+  <button class="ghost" id="gBtn" style="width:100%;display:flex;align-items:center;justify-content:center;gap:10px;background:var(--surface)"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9 3.6l6.7-6.7C35.6 2.4 30.2 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.8 6C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4 7.1-10 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.8-6C1 16.6 0 20.2 0 24s1 7.4 2.7 10.7l7.8-6z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.8 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.8 6C6.6 42.6 14.6 48 24 48z"/></svg>Continue with Google</button>
+  <p class="small muted" style="text-align:center;margin:14px 0">or use your email</p>
+  <div class="field" id="nameField" hidden><label for="authName">Your name</label><input type="text" id="authName" autocomplete="name"></div>
+  <div class="field"><label for="authEmail">Email</label><input type="text" id="authEmail" inputmode="email" autocomplete="email"></div>
+  <div class="field"><label for="authPass">Password</label><input type="password" id="authPass" autocomplete="current-password"><div class="hintx" id="passHint" hidden>At least 6 characters.</div></div>
+  <div class="err" id="authErr" style="margin:0 0 10px"></div>
+  <button class="primary" id="authGo" style="width:100%">Sign in</button>
+  <div class="row" style="justify-content:space-between;margin-top:12px">
+    <button class="ghost" style="box-shadow:none;color:var(--brass);padding:6px 0" id="authSwitch">Create an account</button>
+    <button class="ghost" style="box-shadow:none;color:var(--muted);padding:6px 0" id="authForgot">Forgot password?</button>
+  </div>
+</div></div>
 <div class="toast" id="toast"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
@@ -1395,7 +1415,7 @@ $('chClose').onclick=()=>sheet('chSheet',false);
 /* ================= home ================= */
 function oppHTML(withBtn){const s=Sessions.latestIssue();if(!s)return'';const bi=s.feedback.biggestIssue;
   return `<div class="k">Your biggest opportunity</div><div class="t">${esc(bi.title)}</div><p>${esc(bi.change||'')}</p>${withBtn&&s.cfg?`<div class="row"><button class="ghost" id="oppGo" style="padding:8px 14px;font-size:15px">Practise this</button></div>`:''}`}
-function renderHome(){const h=new Date().getHours();$('greet').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+function renderHome(){const nc=$('nudgeCard');if(nc)nc.hidden=!(Account.fb&&Account.ready&&!Account.user&&Sessions.all().length>0&&!store.get('rs-nudge-off',0));const h=new Date().getHours();$('greet').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   const o=oppHTML(true);$('oppCard').hidden=!o;$('oppCard').innerHTML=o;
   if($('oppGo'))$('oppGo').onclick=()=>{const s=Sessions.latestIssue();const bi=s.feedback.biggestIssue;if(!AI.ok()){toast(AI.err({code:'off'}));return}startRoleplay({...s.cfg,prevOverall:s.overall,focus:bi.retry||bi.change})};
   const hasBase=Sessions.all().some(s=>s.type==='baseline');const tried=new Set(Sessions.all().map(s=>s.scId));const reco=discList(PROFILE).map(id=>SCEN.find(s=>s.id===id)).find(sc=>sc&&!tried.has(sc.id));const ra=$('recoAct');
@@ -1487,7 +1507,7 @@ function renderChart(){if($('tab-progress').classList.contains('active'))renderP
 $('progBaseline').onclick=openBaseline;
 
 /* ================= profile ================= */
-function renderProfile(){renderAIStatus();renderVoicePicker();const p=PROFILE||{goals:[],confidence:'–'};const discT=[...discList(p).map(id=>(DISC.find(d=>d[1]===id)||[''])[0]),p.discCustom].filter(Boolean).join(', ');
+function renderProfile(){renderAIStatus();renderAccount();renderVoicePicker();const p=PROFILE||{goals:[],confidence:'–'};const discT=[...discList(p).map(id=>(DISC.find(d=>d[1]===id)||[''])[0]),p.discCustom].filter(Boolean).join(', ');
   $('profRows').innerHTML=`<div class="srow"><span>Working on<small>${esc(p.goals.join(', ')||'Not set')}</small></span></div>
    <div class="srow"><span>Starting confidence<small>${p.confidence} out of 10</small></span></div>
    <div class="srow"><span>Hard situations<small>${esc(discT||'Not set')}</small></span></div>`;
@@ -1517,11 +1537,73 @@ $('setVoiceName').onchange=e=>{store.set('rs-voice',e.target.value);Voice.speak(
 $('voiceTest').onclick=()=>Voice.speak('Hi. This is how I will sound in your practice conversations.');
 try{speechSynthesis.onvoiceschanged=()=>{if($('tab-profile').classList.contains('active'))renderVoicePicker()}}catch(e){}
 (function(){const w=$('optWords');const saved=store.get('rs-words',null);w.checked=saved!=null?saved:!IS_ANDROID;$('wordsNote').hidden=!IS_ANDROID;w.onchange=()=>store.set('rs-words',w.checked)})();
+/* ================= accounts + cloud sync (Firebase) ================= */
+const FIREBASE_CONFIG={apiKey:"AIzaSyDZqdPZjGC_I8dhVwiiGWlHg7DzQPmHynI",authDomain:"kalaam-3f92e.firebaseapp.com",projectId:"kalaam-3f92e",storageBucket:"kalaam-3f92e.firebasestorage.app",messagingSenderId:"539686089711",appId:"1:539686089711:web:2f84ac74b43ee06371bc1a"};
+const FB_V='12.19.0';
+const LOCAL_ONLY=/^rs-(natural|nvoice|voice|words|nudge-off)$/;  // device-specific settings are not synced
+const Account={fb:null,user:null,ready:false,pushT:null,syncedAt:null,pendingDelete:false,
+  allowed(){return true},
+  async init(){if(!this.allowed())return;
+    try{const b=`https://www.gstatic.com/firebasejs/${FB_V}/`;const[app,auth,fs]=await Promise.all([import(b+'firebase-app.js'),import(b+'firebase-auth.js'),import(b+'firebase-firestore.js')]);
+      const a=app.initializeApp(FIREBASE_CONFIG);this.fb={...auth,...fs,auth:auth.getAuth(a),db:fs.getFirestore(a)};
+      auth.onAuthStateChanged(this.fb.auth,async u=>{this.user=u;this.ready=true;if(u){await this.pull();if(this.pendingDelete){this.pendingDelete=false;this.deleteAccount()}}renderAccount();renderHome()})}
+    catch(e){this.fb=null;this.ready=true}
+    $('landSignIn').hidden=!this.fb;renderAccount()},
+  snapshot(){const o={};Object.keys(localStorage).filter(k=>k.startsWith('rs-')&&!LOCAL_ONLY.test(k)).forEach(k=>{try{o[k]=JSON.parse(localStorage.getItem(k))}catch(e){}});return o},
+  merge(L,C){const out={...C,...L};
+    const ss=[...(C['rs-sessions']||[]),...(L['rs-sessions']||[])];const byId={};ss.forEach(x=>byId[x.id]=x);out['rs-sessions']=Object.values(byId).sort((a,b)=>a.id-b.id).slice(-80);
+    out['rs-chal']={...(C['rs-chal']||{}),...(L['rs-chal']||{})};out['rs-secs']=Math.max(L['rs-secs']||0,C['rs-secs']||0);
+    const sl=L['rs-streak'],sc=C['rs-streak'];if(sl||sc)out['rs-streak']=!sl?sc:!sc?sl:(sl.last>sc.last?sl:sc.last>sl.last?sc:(sl.count>=sc.count?sl:sc));
+    const pl=L['rs-scores']||[],pc=C['rs-scores']||[];out['rs-scores']=pl.length>=pc.length?pl:pc;
+    out['rs-profile']=L['rs-profile']||C['rs-profile'];
+    Object.keys(out).forEach(k=>{if(/^rs-done-/.test(k))out[k]=[...new Set([...(C[k]||[]),...(L[k]||[])])];
+      if(/^rs-tw-/.test(k)&&L[k]!=null&&C[k]!=null)out[k]=Math.min(L[k],C[k])});
+    Object.keys(out).forEach(k=>{if(out[k]==null)delete out[k]});return out},
+  async pull(){const f=this.fb;if(!f||!this.user)return;
+    try{const snap=await f.getDoc(f.doc(f.db,'users',this.user.uid));const local=this.snapshot();const cloud=snap.exists()?(snap.data().data||{}):{};
+      const merged=this.merge(local,cloud);const changed=JSON.stringify(merged)!==JSON.stringify({...local,...merged})||Object.keys(merged).some(k=>JSON.stringify(merged[k])!==JSON.stringify(local[k]));
+      if(changed){Object.entries(merged).forEach(([k,v])=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}})}
+      await this.push(true);if(changed){location.reload();return}}catch(e){toast('Couldn\'t reach the cloud. Your progress is safe on this phone and will sync later.')}},
+  schedule(){if(!this.user)return;clearTimeout(this.pushT);this.pushT=setTimeout(()=>this.push(),2500)},
+  async push(now){const f=this.fb;if(!f||!this.user)return;
+    try{await f.setDoc(f.doc(f.db,'users',this.user.uid),{data:this.snapshot(),updated:f.serverTimestamp(),email:this.user.email||''});this.syncedAt=new Date();if(!now)renderAccount()}catch(e){}},
+  err(e){const c=(e&&e.code)||'';return({'auth/invalid-credential':'Email or password is incorrect.','auth/wrong-password':'Email or password is incorrect.','auth/user-not-found':'No account found with that email.',
+    'auth/email-already-in-use':'An account with this email already exists. Sign in instead.','auth/weak-password':'Use a password with at least 6 characters.','auth/invalid-email':'That email address doesn\'t look right.',
+    'auth/missing-password':'Enter your password.','auth/network-request-failed':'No internet connection. Try again when you\'re online.','auth/too-many-requests':'Too many attempts. Wait a few minutes and try again.',
+    'auth/unauthorized-domain':'Sign-in isn\'t set up for this website yet.','auth/operation-not-allowed':'This sign-in method isn\'t switched on yet.','auth/configuration-not-found':'Sign-in isn\'t switched on yet.','auth/popup-blocked':'Your browser blocked the sign-in window. Allow pop-ups and try again.'})[c]||'Something went wrong. Try again.'},
+  async google(){const f=this.fb;try{await f.signInWithPopup(f.auth,new f.GoogleAuthProvider());closeAuth()}catch(e){if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
+      if(e.code==='auth/popup-blocked'){try{await f.signInWithRedirect(f.auth,new f.GoogleAuthProvider());return}catch(x){}}$('authErr').textContent=this.err(e)}},
+  async email(mode){const f=this.fb;const em=$('authEmail').value.trim(),pw=$('authPass').value;$('authErr').textContent='';$('authGo').disabled=true;
+    try{if(mode==='up'){const r=await f.createUserWithEmailAndPassword(f.auth,em,pw);const n=$('authName').value.trim();if(n)await f.updateProfile(r.user,{displayName:n});renderAccount()}
+      else await f.signInWithEmailAndPassword(f.auth,em,pw);closeAuth();toast(mode==='up'?'Account created. Your progress is backed up.':'Signed in')}catch(e){$('authErr').textContent=this.err(e)}
+    $('authGo').disabled=false},
+  async forgot(){const f=this.fb;const em=$('authEmail').value.trim();if(!em){$('authErr').textContent='Type your email above first.';return}
+    try{await f.sendPasswordResetEmail(f.auth,em);$('authErr').textContent='';toast('Check your email for a reset link.')}catch(e){$('authErr').textContent=this.err(e)}},
+  async signOut(){await this.push(true);await this.fb.signOut(this.fb.auth);toast('Signed out. Your progress stays on this phone.')},
+  async deleteAccount(){const f=this.fb,u=this.user;if(!u)return;
+    try{await f.deleteDoc(f.doc(f.db,'users',u.uid));await f.deleteUser(u);toast('Your account and cloud data were deleted.')}
+    catch(e){if(e.code==='auth/requires-recent-login'){this.pendingDelete=true;await f.signOut(f.auth);openAuth('Sign in again to confirm','For your security, sign in once more and your account will be deleted.');}else toast(this.err(e))}}};
+{const _set=store.set.bind(store),_del=store.del.bind(store);store.set=(k,v)=>{_set(k,v);if(k.startsWith('rs-')&&!LOCAL_ONLY.test(k))Account.schedule()};store.del=k=>{_del(k);Account.schedule()}}
+let authMode='in';
+function openAuth(title,lede){authMode='in';renderAuthMode();if(title)$('authTitle').textContent=title;if(lede)$('authLede').textContent=lede;$('authErr').textContent='';sheet('authSheet',true)}
+function closeAuth(){sheet('authSheet',false)}
+function renderAuthMode(){const up=authMode==='up';$('authTitle').textContent=up?'Create your account':'Sign in';$('authLede').textContent='Back up your progress and use it on any device.';
+  $('nameField').hidden=!up;$('passHint').hidden=!up;$('authGo').textContent=up?'Create account':'Sign in';$('authSwitch').textContent=up?'I already have an account':'Create an account';$('authForgot').hidden=up}
+$('authSwitch').onclick=()=>{authMode=authMode==='up'?'in':'up';$('authErr').textContent='';renderAuthMode()};
+$('authGo').onclick=()=>Account.email(authMode);$('gBtn').onclick=()=>Account.google();$('authForgot').onclick=()=>Account.forgot();$('authClose').onclick=()=>{Account.pendingDelete=false;closeAuth()};
+$('authPass').addEventListener('keydown',e=>{if(e.key==='Enter')$('authGo').click()});
+$('landSignInBtn').onclick=()=>openAuth();$('nudgeGo').onclick=()=>openAuth();$('nudgeNo').onclick=()=>{store.set('rs-nudge-off',1);$('nudgeCard').hidden=true};
+function renderAccount(){const box=$('acctBox');if(!box)return;box.hidden=!Account.fb;if(!Account.fb)return;const u=Account.user;
+  if(!u){box.innerHTML=`<div class="srow"><span>Back up your progress<small>Sign in to keep your sessions and scores safe and use them on any device.</small></span><button class="primary" id="acctIn" style="padding:8px 16px;font-size:15px;flex:none">Sign in</button></div>`;$('acctIn').onclick=()=>openAuth();return}
+  box.innerHTML=`<div class="srow"><span>${esc(u.displayName||u.email||'Signed in')}<small>${esc(u.email||'')}${Account.syncedAt?' · Backed up':''}</small></span><button class="ghost" id="acctOut" style="padding:8px 14px;font-size:14px;flex:none">Sign out</button></div>
+    <div class="srow"><span>Delete my account<small>Permanently removes your account and cloud backup.</small></span><button class="ghost" id="acctDel" style="padding:8px 14px;font-size:14px;color:var(--warn);flex:none">Delete</button></div>`;
+  $('acctOut').onclick=()=>Account.signOut();
+  $('acctDel').onclick=async()=>{if(await ask('Delete your account and cloud backup? Progress saved on this phone stays unless you also reset the app.','Delete account',true))Account.deleteAccount()}}
 /* ================= boot ================= */
 if(Natural.on())setTimeout(()=>Natural.load().then(()=>{if($('tab-profile').classList.contains('active'))renderNatural()}).catch(()=>{}),1500);
 applyTheme();renderStreak();syncBand();renderHome();renderRead();showTw();
 if(!PROFILE)openOnboarding(0);
-AI.init();
+AI.init();Account.init();
 window.addEventListener('load',icons);
 
 </script>
