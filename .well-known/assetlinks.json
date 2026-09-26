@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "io.github.ameervision.twa",
+        "sha256_cert_fingerprints": ["53:F1:E1:C9:8C:79:AD:4C:73:D5:64:D5:EE:61:07:7C:D8:9A:23:32:92:DD:C5:93:0A:A8:49:9D:C7:15:18:D8"]
+      }
+    }]
