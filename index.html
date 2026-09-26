@@ -666,6 +666,11 @@ textarea,input[type=text],input[type=password]{font:inherit;width:100%;padding:1
 <script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 <script>
 const IS_ANDROID=/Android/i.test(navigator.userAgent);
+function joinSpeech(parts){let acc='';for(const p of parts){const x=String(p||'').replace(/\s+/g,' ').trim();if(!x)continue;
+  const a=acc.toLowerCase(),b=x.toLowerCase();
+  if(!acc)acc=x;else if(b.startsWith(a))acc=x;else if(a.endsWith(b))continue;
+  else{let k=Math.min(a.length,b.length),ov=0;for(;k>8;k--){if(a.endsWith(b.slice(0,k))){ov=k;break}}acc=ov?acc+x.slice(ov):acc+' '+x}}
+  return acc}
 /* ================= utils + storage (swap this layer for a cloud database later) ================= */
 const $=id=>document.getElementById(id);
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -981,9 +986,10 @@ function drawTrace(){const w=tc.clientWidth,h=tc.clientHeight;if(!w)return;const
 const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
 const FILLER=/\b(um+|uh+|erm|er|ah+|hmm+|like|basically|actually|literally|you know|i mean|kind of|sort of)\b/g;
 function startWords(){if(!SR||!document.getElementById('optWords').checked)return;
-  try{recog=new SR();recog.continuous=true;recog.interimResults=false;recog.lang='en-US';
-    recog.onresult=e=>{for(let i=e.resultIndex;i<e.results.length;i++)if(e.results[i].isFinal){const t=e.results[i][0].transcript.toLowerCase();
-      S.words+=t.trim().split(/\s+/).filter(Boolean).length;S.fillers+=(t.match(FILLER)||[]).length;S.wordsOK=true}};
+  try{recog=new SR();recog.continuous=true;recog.interimResults=false;recog.lang='en-US';let done='',cur='';
+    const tally=()=>{const t=joinSpeech([done,cur]).toLowerCase();S.words=t.split(/\s+/).filter(Boolean).length;S.fillers=(t.match(FILLER)||[]).length;S.wordsOK=true};
+    recog.onresult=e=>{const F=[];for(let i=0;i<e.results.length;i++)if(e.results[i].isFinal)F.push(e.results[i][0].transcript);cur=joinSpeech(F);tally()};
+    recog.addEventListener('end',()=>{done=joinSpeech([done,cur]);cur=''});
     recog.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){recog=null}};
     recog.onend=()=>{if(sessOn&&recog)try{recog.start()}catch(x){}};recog.start()}catch(e){recog=null}}
 function stopWords(){if(recog){const r=recog;recog=null;try{r.stop()}catch(e){}}}
@@ -1061,20 +1067,21 @@ function renderAIStatus(){const on=AI.ok();try{if(SU&&!$('suSheet').hidden)rende
 const SRx=window.SpeechRecognition||window.webkitSpeechRecognition;
 const Voice={supported:!!SRx,
   listen({onText,maxSec=120,onLimit}={}){
-    let fin='',interim='',active=true,start=Date.now(),lastEnd=Date.now(),longPauses=0,rec,resolveStop,limitT,errMsg='';
+    let committed='',fin='',interim='',active=true,start=Date.now(),lastEnd=Date.now(),longPauses=0,rec,resolveStop,limitT,errMsg='';
+    const now=()=>joinSpeech([committed,fin,interim]);
     const done=new Promise(r=>resolveStop=r);
     const begin=()=>{try{rec=new SRx();rec.continuous=true;rec.interimResults=true;rec.lang=(navigator.language||'en-US').startsWith('en')?navigator.language:'en-US';
-      rec.onresult=e=>{interim='';for(let i=e.resultIndex;i<e.results.length;i++){const t=e.results[i][0].transcript;
-          if(e.results[i].isFinal){const now=Date.now();if(now-lastEnd>2600&&fin)longPauses++;lastEnd=now;fin+=(fin?' ':'')+t.trim()}else interim+=t}
-        onText&&onText((fin+' '+interim).trim())};
+      rec.onresult=e=>{const F=[],I=[];for(let i=0;i<e.results.length;i++)(e.results[i].isFinal?F:I).push(e.results[i][0].transcript);
+        const nf=joinSpeech(F);if(nf.length>fin.length){const t=Date.now();if(t-lastEnd>2600&&(fin||committed))longPauses++;lastEnd=t}fin=nf;interim=joinSpeech(I);
+        onText&&onText(now())};
       rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){errMsg='The microphone is blocked in this view. Type your reply below, or allow the microphone in your browser settings.';active=false}
         else if(e.error==='audio-capture'){errMsg='No microphone was found.';active=false}};
-      rec.onend=()=>{if(active){try{rec.start()}catch(x){}}else resolveStop()};rec.start()}catch(e){errMsg='Speech recognition could not start.';active=false;resolveStop()}};
+      rec.onend=()=>{committed=now();fin='';interim='';if(active){try{rec.start()}catch(x){}}else resolveStop()};rec.start()}catch(e){errMsg='Speech recognition could not start.';active=false;resolveStop()}};
     begin();
     if(maxSec)limitT=setTimeout(()=>{onLimit&&onLimit()},maxSec*1000);
     return{async stop(){clearTimeout(limitT);active=false;try{rec&&rec.stop()}catch(e){}
         await Promise.race([done,new Promise(r=>setTimeout(r,1500))]);
-        const text=(fin+' '+interim).trim();return{text,secs:(Date.now()-start)/1000,longPauses,error:errMsg}},
+        const text=now();return{text,secs:(Date.now()-start)/1000,longPauses,error:errMsg}},
       get error(){return errMsg}}},
   speaking:false,
   list(){try{return speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang))}catch(e){return[]}},
