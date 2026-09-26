@@ -197,6 +197,8 @@ nav button[aria-selected="true"] svg{stroke:var(--brass)}
 @media (prefers-reduced-motion:reduce){.orb,.bar i{transition:none!important}}
 /* ===== v4 additions ===== */
 [hidden]{display:none!important}
+i[data-lucide]{display:inline-block;width:24px;height:24px;flex:none}
+.ic i[data-lucide]{width:20px;height:20px}.warm i[data-lucide],.land li i[data-lucide]{width:22px;height:22px}.slide-art .icons i[data-lucide]{width:52px;height:52px}
 .orbwrap{position:relative;width:220px;height:220px;margin:10px auto 6px;display:grid;place-items:center;transition:none}
 .orbguide{position:absolute;inset:0;border-radius:50%;border:2px dashed var(--line)}
 .orb2{width:100%;height:100%;border-radius:50%;background:radial-gradient(circle at 42% 38%,var(--zone),var(--zoneSoft) 72%);transform:scale(.45);transition:transform var(--d,4s) ease-in-out}
@@ -330,7 +332,7 @@ textarea,input[type=text],input[type=password]{font:inherit;width:100%;padding:1
 <body>
 <div class="app">
   <header>
-    <div class="brand"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 4v16M15 7v10M19 10v4"/></svg>Kalaam</div>
+    <div class="brand" id="homeLogo" role="button" tabindex="0" aria-label="Go to home" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h2M7 8v8M11 4v16M15 7v10M19 10v4"/></svg>Kalaam</div>
     <div class="streak" id="streak"></div>
   </header>
 
@@ -1087,8 +1089,8 @@ const Voice={supported:!!SRx,
   list(){try{return speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang))}catch(e){return[]}},
   rank(v){let s=0;if(/natural|neural|online/i.test(v.name))s+=6;if(/premium|enhanced/i.test(v.name))s+=5;if(/google/i.test(v.name))s+=4;if(/samantha|daniel|karen|serena|aria|jenny|guy|sonia|ryan/i.test(v.name))s+=2;if(v.localService===false)s+=1;if(/en-(us|gb)/i.test(v.lang))s+=1;return s},
   pick(){const vs=this.list();const want=store.get('rs-voice','');return vs.find(v=>v.name===want)||[...vs].sort((a,b)=>this.rank(b)-this.rank(a))[0]||null},
-  speak(text,on=true){if(on&&Natural.on()&&Natural.tts){const per=(typeof RP!=='undefined'&&RP&&RP.persona)||'';const rate=/Impatient|Aggressive/.test(per)?1.1:/Beginner|Confused|Distracted/.test(per)?.92:1;
-      this.speaking=true;return Natural.speak(text,rate,!$('rpSheet').hidden?7000:0).then(()=>{this.speaking=false},e=>{this.speaking=false;if(e&&e.slow)return this.deviceSpeak(text,on)})}
+  speak(text,on=true){if(on&&Natural.on()&&!Natural.ready)Natural.warm();if(on&&Natural.on()&&Natural.ready){const per=(typeof RP!=='undefined'&&RP&&RP.persona)||'';const rate=/Impatient|Aggressive/.test(per)?1.1:/Beginner|Confused|Distracted/.test(per)?.92:1;
+      this.speaking=true;return Natural.speak(text,rate,!$('rpSheet').hidden?7000:0).then(()=>{this.speaking=false},e=>{this.speaking=false;return this.deviceSpeak(text,on)})}
     return this.deviceSpeak(text,on)},
   inChat:false,
   deviceSpeak(text,on=true){
@@ -1098,25 +1100,38 @@ const Voice={supported:!!SRx,
       u.onend=u.onerror=()=>{this.speaking=false;res()};this.speaking=true;speechSynthesis.speak(u)}catch(e){res()}})},
   hush(){try{speechSynthesis.cancel()}catch(e){}Natural.stop();this.speaking=false}};
 const NAT_VOICES=[['af_heart','Heart (American, female)'],['af_bella','Bella (American, female)'],['am_michael','Michael (American, male)'],['am_fenrir','Fenrir (American, male, deeper)'],['am_puck','Puck (American, male, lively)'],['bf_emma','Emma (British, female)'],['bm_george','George (British, male)'],['af_nicole','Nicole (American, female, soft)']];
-const Natural={tts:null,loading:null,audio:null,token:0,
+const KOKORO_WORKER=`import {KokoroTTS} from 'https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js';
+let tts=null;
+self.onmessage=async e=>{const m=e.data;try{
+  if(m.type==='load'){if(!tts){const f={};tts=await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',{dtype:'q8',device:'wasm',
+    progress_callback:p=>{if(p.status==='progress'&&p.total){f[p.file]=[p.loaded,p.total];let a=0,b=0;for(const x of Object.values(f)){a+=x[0];b+=x[1]}self.postMessage({type:'progress',pc:Math.round(a/b*100)})}}})}
+    self.postMessage({type:'ready'})}
+  else if(m.type==='gen'){const a=await tts.generate(m.text,{voice:m.voice,speed:m.speed});self.postMessage({type:'audio',id:m.id,blob:a.toBlob()})}
+}catch(err){self.postMessage({type:'error',id:m.id,msg:String((err&&err.message)||err)})}};`;
+const Natural={worker:null,ready:false,loadP:null,onProg:null,jobs:{},seq:0,audio:null,token:0,
   allowed(){return true},
   on(){return this.allowed()&&store.get('rs-natural',false)},
   voice(){return store.get('rs-nvoice','af_heart')},
-  load(onProgress){if(this.tts)return Promise.resolve(this.tts);if(this.loading)return this.loading;
-    this.loading=(async()=>{const m=await import('https://cdn.jsdelivr.net/npm/kokoro-js@1.2.1/dist/kokoro.web.js');
-      const files={};const tts=await m.KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0-ONNX',{dtype:'q8',device:'wasm',
-        progress_callback:p=>{if(p.status==='progress'&&p.total){files[p.file]=[p.loaded,p.total];const t=Object.values(files).reduce((a,f)=>[a[0]+f[0],a[1]+f[1]],[0,0]);onProgress&&onProgress(Math.round(t[0]/t[1]*100))}}});
-      this.tts=tts;return tts})();
-    return this.loading.catch(e=>{this.loading=null;throw e})},
+  // the voice model runs in a background worker so the app never freezes while it loads or speaks
+  load(onProgress){if(this.ready)return Promise.resolve();this.onProg=onProgress||this.onProg;if(this.loadP)return this.loadP;
+    this.loadP=new Promise((res,rej)=>{try{const w=new Worker(URL.createObjectURL(new Blob([KOKORO_WORKER],{type:'text/javascript'})),{type:'module'});this.worker=w;
+      w.onmessage=e=>{const m=e.data;if(m.type==='progress'){this.onProg&&this.onProg(m.pc)}else if(m.type==='ready'){this.ready=true;res()}
+        else if(m.type==='audio'){const j=this.jobs[m.id];if(j){delete this.jobs[m.id];j.res(m.blob)}}
+        else if(m.type==='error'){const j=this.jobs[m.id];if(j){delete this.jobs[m.id];j.rej(new Error(m.msg))}else rej(new Error(m.msg))}};
+      w.onerror=e=>{rej(new Error('worker'));Object.values(this.jobs).forEach(j=>j.rej(new Error('worker')));this.jobs={}};
+      w.postMessage({type:'load'})}catch(e){rej(e)}});
+    return this.loadP.catch(e=>{this.loadP=null;this.ready=false;try{this.worker&&this.worker.terminate()}catch(x){}this.worker=null;throw e})},
+  gen(text,speed){const id=++this.seq;return new Promise((res,rej)=>{this.jobs[id]={res,rej};this.worker.postMessage({type:'gen',id,text,voice:this.voice(),speed})})},
   split(t){return(t.match(/[^.!?]+[.!?]*\s*/g)||[t]).map(x=>x.trim()).filter(Boolean)},
-  async speak(text,rate=1,maxWait=0){const my=++this.token;const tts=await this.load();const parts=this.split(text);
-    let next=tts.generate(parts[0],{voice:this.voice(),speed:rate});
+  async speak(text,rate=1,maxWait=0){const my=++this.token;if(!this.ready)throw{slow:true};const parts=this.split(text);
+    let next=this.gen(parts[0],rate);
     // on slower phones, don't keep the user waiting: fall back to the device voice for this reply
-    if(maxWait&&!(await Promise.race([next.then(()=>true),new Promise(r=>setTimeout(()=>r(false),maxWait))]))){if(my===this.token)this.token++;throw{slow:true}}
-    for(let i=0;i<parts.length;i++){const a=await next;if(my!==this.token)return;
-      next=i+1<parts.length?tts.generate(parts[i+1],{voice:this.voice(),speed:rate}):null;
-      await new Promise(res=>{const url=URL.createObjectURL(a.toBlob());const el=new Audio(url);this.audio=el;el.onended=el.onerror=()=>{URL.revokeObjectURL(url);res()};el.play().catch(res)});
+    if(maxWait&&!(await Promise.race([next.then(()=>true,()=>true),new Promise(r=>setTimeout(()=>r(false),maxWait))]))){if(my===this.token)this.token++;throw{slow:true}}
+    for(let i=0;i<parts.length;i++){const blob=await next;if(my!==this.token)return;
+      next=i+1<parts.length?this.gen(parts[i+1],rate):null;
+      await new Promise(res=>{const url=URL.createObjectURL(blob);const el=new Audio(url);this.audio=el;el.onended=el.onerror=()=>{URL.revokeObjectURL(url);res()};el.play().catch(res)});
       if(my!==this.token)return}},
+  warm(){if(this.on()&&!this.ready&&!this.loadP)this.load().then(()=>{if($('tab-profile').classList.contains('active'))renderNatural()}).catch(()=>{store.set('rs-natural',false);toast('Natural voices couldn\'t start on this phone, so the standard voice is used.');renderNatural()})},
   stop(){this.token++;if(this.audio){try{this.audio.pause()}catch(e){}this.audio=null}}};
 const AudioRec={mr:null,stream:null,chunks:[],
   async start(){try{this.stream=await navigator.mediaDevices.getUserMedia({audio:true});this.chunks=[];this.mr=new MediaRecorder(this.stream);this.mr.ondataavailable=e=>e.data.size&&this.chunks.push(e.data);this.mr.start();return true}catch(e){this.mr=null;return false}},
@@ -1289,7 +1304,7 @@ function renderPractice(){renderAIStatus();
   $('scList').querySelectorAll('button').forEach(b=>b.onclick=()=>openSetup(SCEN.find(s=>s.id===b.dataset.id)));icons()}
 $('customBtn').onclick=()=>openSetup(null);
 let SU=null;
-function openSetup(sc,preset={}){SU={sc,diff:preset.diff||(PROFILE&&PROFILE.confidence<=4?'easy':'realistic'),persona:preset.persona||(sc&&sc.cat==='Presentation'?'Neutral':'Neutral'),content:''};renderSetup();sheet('suSheet',true)}
+function openSetup(sc,preset={}){Natural.warm();SU={sc,diff:preset.diff||(PROFILE&&PROFILE.confidence<=4?'easy':'realistic'),persona:preset.persona||(sc&&sc.cat==='Presentation'?'Neutral':'Neutral'),content:''};renderSetup();sheet('suSheet',true)}
 function renderSetup(){const sc=SU.sc,custom=!sc;
   $('suBody').innerHTML=`<h2>${custom?'Your own scenario':esc(sc.t)}</h2>
    ${custom?`<div class="field"><label for="cuRole">Who is the other person?</label><input type="text" id="cuRole" placeholder="e.g. my landlord, a new client, my team lead"></div>
@@ -1422,7 +1437,7 @@ $('chClose').onclick=()=>sheet('chSheet',false);
 /* ================= home ================= */
 function oppHTML(withBtn){const s=Sessions.latestIssue();if(!s)return'';const bi=s.feedback.biggestIssue;
   return `<div class="k">Your biggest opportunity</div><div class="t">${esc(bi.title)}</div><p>${esc(bi.change||'')}</p>${withBtn&&s.cfg?`<div class="row"><button class="ghost" id="oppGo" style="padding:8px 14px;font-size:15px">Practise this</button></div>`:''}`}
-function renderHome(){const nc=$('nudgeCard');if(nc)nc.hidden=!(Account.fb&&Account.ready&&!Account.user&&Sessions.all().length>0&&!store.get('rs-nudge-off',0));const h=new Date().getHours();$('greet').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
+function renderHome(){const nc=$('nudgeCard');if(nc)nc.hidden=!(Account.allowed()&&!(Account.ready?Account.user:store.get('rs-auth',false))&&Sessions.all().length>0&&!store.get('rs-nudge-off',0));const h=new Date().getHours();$('greet').textContent=h<12?'Good morning':h<17?'Good afternoon':'Good evening';
   const o=oppHTML(true);$('oppCard').hidden=!o;$('oppCard').innerHTML=o;
   if($('oppGo'))$('oppGo').onclick=()=>{const s=Sessions.latestIssue();const bi=s.feedback.biggestIssue;if(!AI.ok()){toast(AI.err({code:'off'}));return}startRoleplay({...s.cfg,prevOverall:s.overall,focus:bi.retry||bi.change})};
   const hasBase=Sessions.all().some(s=>s.type==='baseline');const tried=new Set(Sessions.all().map(s=>s.scId));const reco=discList(PROFILE).map(id=>SCEN.find(s=>s.id===id)).find(sc=>sc&&!tried.has(sc.id));const ra=$('recoAct');
@@ -1531,14 +1546,14 @@ $('resetBtn').onclick=async()=>{if(!(await ask('Delete your profile, sessions, p
 function renderNatural(st){const ok=Natural.allowed();$('natRow').hidden=!ok;if(!ok)return;const on=Natural.on();
   $('natPick').hidden=!on;$('natVoice').innerHTML=NAT_VOICES.map(([k,n])=>`<option value="${k}" ${k===Natural.voice()?'selected':''}>${n}</option>`).join('');
   $('devRow').hidden=on;$('devPick').hidden=on;
-  if(!st){$('natBtn').textContent=on?(Natural.tts?'Preview':'Loading…'):'Download';$('natBtn').disabled=on&&!Natural.tts}
-  $('natStatus').textContent=st||(on?(Natural.tts?'On. Your AI partner uses a natural voice.':'Getting voices ready…'):'Human-sounding voices that run on your phone. One-time 92 MB download, best on Wi-Fi.')}
-$('natBtn').onclick=async()=>{if(Natural.on()&&Natural.tts){Voice.speak('Hi. This is how I will sound in your practice conversations.');return}
+  if(!st){$('natBtn').textContent=on?(Natural.ready?'Preview':'Loading…'):'Download';$('natBtn').disabled=on&&!Natural.ready}
+  $('natStatus').textContent=st||(on?(Natural.ready?'On. Your AI partner uses a natural voice.':'Getting voices ready…'):'Human-sounding voices that run on your phone. One-time 92 MB download, best on Wi-Fi.')}
+$('natBtn').onclick=async()=>{if(Natural.on()&&Natural.ready){Voice.speak('Hi. This is how I will sound in your practice conversations.');return}
   $('natBtn').disabled=true;$('natBtn').textContent='Downloading…';
   try{await Natural.load(pc=>renderNatural(`Downloading voices… ${pc}%`));store.set('rs-natural',true);renderNatural();toast('Natural voices are ready');Voice.speak('Hi. This is how I will sound in your practice conversations.')}
   catch(e){$('natBtn').disabled=false;$('natBtn').textContent='Try again';renderNatural('The download didn\'t finish. Check your connection and try again.')}};
 $('natVoice').onchange=e=>{store.set('rs-nvoice',e.target.value);Voice.speak('Hi. This is how I will sound in your practice conversations.')};
-function renderVoicePicker(){renderNatural();const sel=$('setVoiceName');const vs=Voice.list();const cur=Voice.pick();
+function renderVoicePicker(){Natural.warm();renderNatural();const sel=$('setVoiceName');const vs=Voice.list();const cur=Voice.pick();
   sel.innerHTML=vs.length?[...vs].sort((a,b)=>Voice.rank(b)-Voice.rank(a)).map(v=>`<option value="${esc(v.name)}" ${cur&&cur.name===v.name?'selected':''}>${esc(v.name)} (${v.lang})</option>`).join(''):'<option>No English voices found on this device</option>';}
 $('setVoiceName').onchange=e=>{store.set('rs-voice',e.target.value);Voice.speak('Hi. This is how I will sound in your practice conversations.')};
 $('voiceTest').onclick=()=>Voice.speak('Hi. This is how I will sound in your practice conversations.');
@@ -1547,13 +1562,13 @@ try{speechSynthesis.onvoiceschanged=()=>{if($('tab-profile').classList.contains(
 /* ================= accounts + cloud sync (Firebase) ================= */
 const FIREBASE_CONFIG={apiKey:"AIzaSyDZqdPZjGC_I8dhVwiiGWlHg7DzQPmHynI",authDomain:"kalaam-3f92e.firebaseapp.com",projectId:"kalaam-3f92e",storageBucket:"kalaam-3f92e.firebasestorage.app",messagingSenderId:"539686089711",appId:"1:539686089711:web:2f84ac74b43ee06371bc1a"};
 const FB_V='12.19.0';
-const LOCAL_ONLY=/^rs-(natural|nvoice|voice|words|nudge-off)$/;  // device-specific settings are not synced
+const LOCAL_ONLY=/^rs-(natural|nvoice|voice|words|nudge-off|auth)$/;  // device-specific settings are not synced
 const Account={fb:null,user:null,ready:false,pushT:null,syncedAt:null,pendingDelete:false,
   allowed(){return true},
   async init(){if(!this.allowed())return;
     try{const b=`https://www.gstatic.com/firebasejs/${FB_V}/`;const[app,auth,fs]=await Promise.all([import(b+'firebase-app.js'),import(b+'firebase-auth.js'),import(b+'firebase-firestore.js')]);
       const a=app.initializeApp(FIREBASE_CONFIG);this.fb={...auth,...fs,auth:auth.getAuth(a),db:fs.getFirestore(a)};
-      auth.onAuthStateChanged(this.fb.auth,async u=>{this.user=u;this.ready=true;if(u){await this.pull();if(this.pendingDelete){this.pendingDelete=false;this.deleteAccount()}}renderAccount();renderHome()})}
+      auth.onAuthStateChanged(this.fb.auth,async u=>{this.user=u;this.ready=true;store.set('rs-auth',!!u);if(u){await this.pull();if(this.pendingDelete){this.pendingDelete=false;this.deleteAccount()}}renderAccount();renderHome()})}
     catch(e){this.fb=null;this.ready=true}
     $('landSignIn').hidden=!this.fb;renderAccount()},
   snapshot(){const o={};Object.keys(localStorage).filter(k=>k.startsWith('rs-')&&!LOCAL_ONLY.test(k)).forEach(k=>{try{o[k]=JSON.parse(localStorage.getItem(k))}catch(e){}});return o},
@@ -1578,9 +1593,9 @@ const Account={fb:null,user:null,ready:false,pushT:null,syncedAt:null,pendingDel
     'auth/email-already-in-use':'An account with this email already exists. Sign in instead.','auth/weak-password':'Use a password with at least 6 characters.','auth/invalid-email':'That email address doesn\'t look right.',
     'auth/missing-password':'Enter your password.','auth/network-request-failed':'No internet connection. Try again when you\'re online.','auth/too-many-requests':'Too many attempts. Wait a few minutes and try again.',
     'auth/unauthorized-domain':'Sign-in isn\'t set up for this website yet.','auth/operation-not-allowed':'This sign-in method isn\'t switched on yet.','auth/configuration-not-found':'Sign-in isn\'t switched on yet.','auth/popup-blocked':'Your browser blocked the sign-in window. Allow pop-ups and try again.'})[c]||'Something went wrong. Try again.'},
-  async google(){const f=this.fb;try{await f.signInWithPopup(f.auth,new f.GoogleAuthProvider());closeAuth()}catch(e){if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
+  async google(){const f=this.fb;if(!f){$('authErr').textContent='Still connecting. Try again in a moment.';return}try{await f.signInWithPopup(f.auth,new f.GoogleAuthProvider());closeAuth()}catch(e){if(e.code==='auth/popup-closed-by-user'||e.code==='auth/cancelled-popup-request')return;
       if(e.code==='auth/popup-blocked'){try{await f.signInWithRedirect(f.auth,new f.GoogleAuthProvider());return}catch(x){}}$('authErr').textContent=this.err(e)}},
-  async email(mode){const f=this.fb;const em=$('authEmail').value.trim(),pw=$('authPass').value;$('authErr').textContent='';$('authGo').disabled=true;
+  async email(mode){const f=this.fb;if(!f){$('authErr').textContent='Still connecting. Try again in a moment.';return}const em=$('authEmail').value.trim(),pw=$('authPass').value;$('authErr').textContent='';$('authGo').disabled=true;
     try{if(mode==='up'){const r=await f.createUserWithEmailAndPassword(f.auth,em,pw);const n=$('authName').value.trim();if(n)await f.updateProfile(r.user,{displayName:n});renderAccount()}
       else await f.signInWithEmailAndPassword(f.auth,em,pw);closeAuth();toast(mode==='up'?'Account created. Your progress is backed up.':'Signed in')}catch(e){$('authErr').textContent=this.err(e)}
     $('authGo').disabled=false},
@@ -1606,8 +1621,9 @@ function renderAccount(){const box=$('acctBox');if(!box)return;box.hidden=!Accou
     <div class="srow"><span>Delete my account<small>Permanently removes your account and cloud backup.</small></span><button class="ghost" id="acctDel" style="padding:8px 14px;font-size:14px;color:var(--warn);flex:none">Delete</button></div>`;
   $('acctOut').onclick=()=>Account.signOut();
   $('acctDel').onclick=async()=>{if(await ask('Delete your account and cloud backup? Progress saved on this phone stays unless you also reset the app.','Delete account',true))Account.deleteAccount()}}
+$('homeLogo').onclick=()=>go('home');$('homeLogo').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go('home')}};
 /* ================= boot ================= */
-if(Natural.on())setTimeout(()=>Natural.load().then(()=>{if($('tab-profile').classList.contains('active'))renderNatural()}).catch(()=>{}),1500);
+
 applyTheme();renderStreak();syncBand();renderHome();renderRead();showTw();
 if(!PROFILE)openOnboarding(0);
 AI.init();Account.init();
