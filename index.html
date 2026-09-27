@@ -486,6 +486,7 @@ textarea,input[type=text],input[type=password]{font:inherit;width:100%;padding:1
       <div class="srow" id="natPick" hidden style="padding-top:0"><select id="natVoice" style="width:100%"></select></div>
       <div class="srow" id="devRow"><span>AI voice<small>Voices come from your device. Pick the most natural one.</small></span><button class="ghost" id="voiceTest" style="padding:7px 14px;font-size:14px">Preview</button></div>
       <div class="srow" id="devPick" style="padding-top:0"><select id="setVoiceName" style="width:100%"></select></div>
+      <div class="srow" id="voiceTip" hidden><span>Want a more natural voice?<small>On your phone open Settings → search "Text-to-speech" → Google → Install voice data → English, and download a voice you like. Then come back and pick it above.</small></span></div>
       <div class="srow"><span>Voice routine focus</span><select id="setGoal"></select></div>
       <div class="srow"><span>Appearance</span><select id="setTheme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select></div>
     </div>
@@ -665,9 +666,10 @@ textarea,input[type=text],input[type=password]{font:inherit;width:100%;padding:1
 </div></div>
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/lucide@0.460.0/dist/umd/lucide.min.js"></script>
 <script>
 const IS_ANDROID=/Android/i.test(navigator.userAgent);
+const IS_MOBILE=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 function joinSpeech(parts){let acc='';for(const p of parts){const x=String(p||'').replace(/\s+/g,' ').trim();if(!x)continue;
   const a=acc.toLowerCase(),b=x.toLowerCase();
   if(!acc)acc=x;else if(b.startsWith(a))acc=x;else if(a.endsWith(b))continue;
@@ -1087,7 +1089,7 @@ const Voice={supported:!!SRx,
       get error(){return errMsg}}},
   speaking:false,
   list(){try{return speechSynthesis.getVoices().filter(v=>/^en/i.test(v.lang))}catch(e){return[]}},
-  rank(v){let s=0;if(/natural|neural|online/i.test(v.name))s+=6;if(/premium|enhanced/i.test(v.name))s+=5;if(/google/i.test(v.name))s+=4;if(/samantha|daniel|karen|serena|aria|jenny|guy|sonia|ryan/i.test(v.name))s+=2;if(v.localService===false)s+=1;if(/en-(us|gb)/i.test(v.lang))s+=1;return s},
+  rank(v){let s=0;if(/natural|neural|online/i.test(v.name))s+=6;if(/premium|enhanced/i.test(v.name))s+=5;if(/google/i.test(v.name))s+=4;if(/samantha|daniel|karen|serena|aria|jenny|guy|sonia|ryan/i.test(v.name))s+=2;if(v.localService===false)s+=3;if(/en-(us|gb)/i.test(v.lang))s+=1;return s},
   pick(){const vs=this.list();const want=store.get('rs-voice','');return vs.find(v=>v.name===want)||[...vs].sort((a,b)=>this.rank(b)-this.rank(a))[0]||null},
   speak(text,on=true){if(on&&Natural.on()&&!Natural.ready)Natural.warm();if(on&&Natural.on()&&Natural.ready){const per=(typeof RP!=='undefined'&&RP&&RP.persona)||'';const rate=/Impatient|Aggressive/.test(per)?1.1:/Beginner|Confused|Distracted/.test(per)?.92:1;
       this.speaking=true;return Natural.speak(text,rate,!$('rpSheet').hidden?7000:0).then(()=>{this.speaking=false},e=>{this.speaking=false;return this.deviceSpeak(text,on)})}
@@ -1109,7 +1111,7 @@ self.onmessage=async e=>{const m=e.data;try{
   else if(m.type==='gen'){const a=await tts.generate(m.text,{voice:m.voice,speed:m.speed});self.postMessage({type:'audio',id:m.id,blob:a.toBlob()})}
 }catch(err){self.postMessage({type:'error',id:m.id,msg:String((err&&err.message)||err)})}};`;
 const Natural={worker:null,ready:false,loadP:null,onProg:null,jobs:{},seq:0,audio:null,token:0,
-  allowed(){return true},
+  allowed(){return !IS_MOBILE},  // desktop only: the model is too heavy for many phones
   on(){return this.allowed()&&store.get('rs-natural',false)},
   voice(){return store.get('rs-nvoice','af_heart')},
   // the voice model runs in a background worker so the app never freezes while it loads or speaks
@@ -1553,7 +1555,7 @@ $('natBtn').onclick=async()=>{if(Natural.on()&&Natural.ready){Voice.speak('Hi. T
   try{await Natural.load(pc=>renderNatural(`Downloading voices… ${pc}%`));store.set('rs-natural',true);renderNatural();toast('Natural voices are ready');Voice.speak('Hi. This is how I will sound in your practice conversations.')}
   catch(e){$('natBtn').disabled=false;$('natBtn').textContent='Try again';renderNatural('The download didn\'t finish. Check your connection and try again.')}};
 $('natVoice').onchange=e=>{store.set('rs-nvoice',e.target.value);Voice.speak('Hi. This is how I will sound in your practice conversations.')};
-function renderVoicePicker(){Natural.warm();renderNatural();const sel=$('setVoiceName');const vs=Voice.list();const cur=Voice.pick();
+function renderVoicePicker(){Natural.warm();renderNatural();$('voiceTip').hidden=!IS_ANDROID;const sel=$('setVoiceName');const vs=Voice.list();const cur=Voice.pick();
   sel.innerHTML=vs.length?[...vs].sort((a,b)=>Voice.rank(b)-Voice.rank(a)).map(v=>`<option value="${esc(v.name)}" ${cur&&cur.name===v.name?'selected':''}>${esc(v.name)} (${v.lang})</option>`).join(''):'<option>No English voices found on this device</option>';}
 $('setVoiceName').onchange=e=>{store.set('rs-voice',e.target.value);Voice.speak('Hi. This is how I will sound in your practice conversations.')};
 $('voiceTest').onclick=()=>Voice.speak('Hi. This is how I will sound in your practice conversations.');
@@ -1583,9 +1585,9 @@ const Account={fb:null,user:null,ready:false,pushT:null,syncedAt:null,pendingDel
     Object.keys(out).forEach(k=>{if(out[k]==null)delete out[k]});return out},
   async pull(){const f=this.fb;if(!f||!this.user)return;
     try{const snap=await f.getDoc(f.doc(f.db,'users',this.user.uid));const local=this.snapshot();const cloud=snap.exists()?(snap.data().data||{}):{};
-      const merged=this.merge(local,cloud);const changed=JSON.stringify(merged)!==JSON.stringify({...local,...merged})||Object.keys(merged).some(k=>JSON.stringify(merged[k])!==JSON.stringify(local[k]));
-      if(changed){Object.entries(merged).forEach(([k,v])=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}})}
-      await this.push(true);if(changed){location.reload();return}}catch(e){toast('Couldn\'t reach the cloud. Your progress is safe on this phone and will sync later.')}},
+      const merged=this.merge(local,cloud);const diff=Object.keys(merged).filter(k=>JSON.stringify(merged[k])!==JSON.stringify(local[k]));
+      diff.forEach(k=>{try{localStorage.setItem(k,JSON.stringify(merged[k]))}catch(e){}});
+      await this.push(true);if(diff.length)refreshFromStore()}catch(e){toast('Couldn\'t reach the cloud. Your progress is safe on this phone and will sync later.')}},
   schedule(){if(!this.user)return;clearTimeout(this.pushT);this.pushT=setTimeout(()=>this.push(),2500)},
   async push(now){const f=this.fb;if(!f||!this.user)return;
     try{await f.setDoc(f.doc(f.db,'users',this.user.uid),{data:this.snapshot(),updated:f.serverTimestamp(),email:this.user.email||''});this.syncedAt=new Date();if(!now)renderAccount()}catch(e){}},
@@ -1622,6 +1624,11 @@ function renderAccount(){const box=$('acctBox');if(!box)return;box.hidden=!Accou
   $('acctOut').onclick=()=>Account.signOut();
   $('acctDel').onclick=async()=>{if(await ask('Delete your account and cloud backup? Progress saved on this phone stays unless you also reset the app.','Delete account',true))Account.deleteAccount()}}
 $('homeLogo').onclick=()=>go('home');$('homeLogo').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();go('home')}};
+if(IS_MOBILE){if(store.get('rs-natural',false))store.set('rs-natural',false);try{caches.has('transformers-cache').then(h=>{if(h)caches.delete('transformers-cache')})}catch(e){}}
+function refreshFromStore(){PROFILE=store.get('rs-profile',null);goal=store.get('rs-goal',null)||(PROFILE?deriveGoal(PROFILE.goals):'office');
+  if(PROFILE&&!$('obSheet').hidden)sheet('obSheet',false);renderStreak();
+  const t=document.querySelector('main section.active');const id=t?t.id.replace('tab-',''):'home';
+  ({home:renderHome,practice:renderPractice,train:()=>openTrain(trainTab),progress:renderProgress,profile:renderProfile})[id]()}
 /* ================= boot ================= */
 
 applyTheme();renderStreak();syncBand();renderHome();renderRead();showTw();
